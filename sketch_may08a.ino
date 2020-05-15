@@ -1,317 +1,235 @@
-#include "DHT.h" 
-#include <Wire.h> 
-#include <SoftwareSerial.h> 
-SoftwareSerial mySerial(52, 53); 
+/*
+Ethernet Web Server
+Управление светодиодом при нажатии кнопки on/off (вводе разных URL адресов) в браузере
 
-  #define DHTPIN 45 //DHT11 
-  #define Voda_pin 37   // пин датчика воды
-  #define button_pin 10   // пин кнопки 1
-  #define button_pin222 11   // пин кнопки 2
-  #define button_pin333 8   // пин кнопки 3
-  #define button_pin444 9   // пин кнопки 4
-  #define relay_pin 2    // пин реле 1
-  #define relay_pin222 3    // пин реле 2
-  #define relay_pin333 4   // пин реле 3
-  #define relay_pin444 5    // пин реле 4 
-  #define relay_pin555 7 //пин реле 5
-  #define relay_pin666  6 // пин реле 6
-  #define relay_pin777 12  // пин реле7
-  #define relay_pin888  13 // пин реле 8
-  #define gaz_pin A0 // MQ-4
-  #define bip_pin 38  // пищалка
+Адрес включения светодиода:
+IP-АДРЕС - тот IP, полученный при запуске примера DhcpAdressPrinter
 
-     int sensorValue = 0; //переменная для работы датчика газа
-     int val; //переменная для модуля BT
-     DHT dht(DHTPIN, DHT11); //инициируем датчик DHT 
+http://IP-АДРЕС/$1
 
-       //реле 1
-       
-          boolean butt_flag = 0;      // флажок нажатия кнопки
-          boolean butt;               // переменная, харнящая состояние кнопки
-          boolean flag = 0;           // флажок режима
-          unsigned long last_press;   // таймер для фильтра дребезга
-       //реле 2
-       
-          boolean butt_flag222 = 0;   // флажок нажатия кнопки
-          boolean butt222;            // переменная, харнящая состояние кнопки
-          boolean flag222 = 0;        // флажок режима
-          unsigned long last_press222;// таймер для фильтра дребезга
-       //реле 3
-       
-          boolean butt_flag333 = 0;   // флажок нажатия кнопки
-          boolean butt333;            // переменная, харнящая состояние кнопки
-          boolean flag333 = 0;        // флажок режима
-          unsigned long last_press333;// таймер для фильтра дребезга
-       //реле 4
-       
-          boolean butt_flag444 = 0;   // флажок нажатия кнопки
-          boolean butt444;            // переменная, харнящая состояние кнопки
-          boolean flag444= 0;         // флажок режима
-          unsigned long last_press444;// таймер для фильтра дребезга
-       //реле 5
-       
-          boolean butt_flag555 = 0;   // флажок нажатия кнопки
-          boolean butt555;            // переменная, харнящая состояние кнопки
-          boolean flag555= 0;         // флажок режима
-          unsigned long last_press555;// таймер для фильтра дребезга
+Для того, чтобы выключить:
+http://IP-АДРЕС/$2
 
-void setup() 
-    { 
-        Serial.begin(9600);
-        mySerial.begin(9600);
-        dht.begin();
-        
-             pinMode(button_pin, INPUT_PULLUP);     
-             pinMode(relay_pin, OUTPUT);           
-             pinMode(button_pin222, INPUT_PULLUP); 
-             pinMode(relay_pin222, OUTPUT);        
-             pinMode(button_pin333, INPUT_PULLUP); 
-             pinMode(relay_pin333, OUTPUT);        
-             pinMode(button_pin444, INPUT_PULLUP); 
-             pinMode(relay_pin444, OUTPUT);        
-             pinMode(Voda_pin, INPUT_PULLUP);      
-             pinMode(relay_pin555, OUTPUT);        
-             pinMode(relay_pin888, OUTPUT);        
-             pinMode(relay_pin666, OUTPUT);        
-             pinMode(relay_pin777, OUTPUT);        
-             pinMode(bip_pin, OUTPUT);             
-             pinMode(52,INPUT);                    
-             pinMode(53,OUTPUT);                   
-            
-          // Serial.println("MQ2 Test"); 
-            
+*/
+
+#include <SPI.h>             //библиотека для работы с SPI
+#include <Ethernet.h>        //библиотека для работы с Ethernet 
+boolean newInfo = 0;        //переменная для новой информации
+//MAC адрес вашего Ethernet-модуля, если его у вас нет, введите любой
+//или оставьте тот, что в примере
+byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDA, 0x02 };     
+
+//указываем IP адрес
+//будьте внимательны! IP адрес указывается тот, который вы получили запустив пример DhcpAdressPrinter
+IPAddress ip(192 ,168 ,0 ,10 );    //пример МОЕГО IP адреса, вы вводите сюда СВОЙ
+
+//инифиализация библиотеки Ethernet server library
+EthernetServer server(80);
+
+void setup()
+{
+                                              
+ /* без строки "digitalWrite(Relay1, HIGH);" перед "pinMode" при включении
+ * ардуины будет происходить кратковременное переключение реле,
+ * а значит кратковременно подастся питание, что нам категорически
+ * не надо!
+ */
+  digitalWrite(2, HIGH);
+  digitalWrite(3, HIGH);
+  digitalWrite(4, HIGH);
+  digitalWrite(5, HIGH);
+  digitalWrite(6, HIGH);
+  digitalWrite(7, HIGH);
+  digitalWrite(8, HIGH);
+  digitalWrite(9, HIGH);
+ 
+  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT); 
+  pinMode(4, OUTPUT); 
+  pinMode(5, OUTPUT); 
+  pinMode(6, OUTPUT); //инициализируем 2-9 пин как выход для светодиода   
+  pinMode(7, OUTPUT); 
+  pinMode(8, OUTPUT); 
+  pinMode(9, OUTPUT);  
+  //запускаем сервер с указанными ранее MAC и вашим IP
+  Ethernet.begin(mac, ip);
+  server.begin();
+  Serial.begin(9600);
+}
+
+void loop()
+{
+  //принимаем данные, посылаемые клиентом
+  EthernetClient client = server.available();
+  if(client){                                       //если запрос оканчивается пустой строкой
+  boolean currentLineIsBlank = true;                //ставим метку об окончании запроса (дословно: текущая линия чиста)
+  while (client.connected()) {                      //пока есть соединение с клиентом
+    if (client.available()) {                       //если клиент активен
+      char c = client.read();                       //считываем посылаемую информацию в переменную "с"
+                                                  
+      if(newInfo && c == ' '){                      //если переменная новой информации = 1 и "с", в которой записан запрос, равен пустой строке
+        newInfo = 0;                                //то обнуляем переменную поступления новой информации
       }
       
-void loop() 
-      {
-        
-          //первое реле
-          
-           {
-                butt = !digitalRead(button_pin);  
-                if (butt == 1 && butt_flag == 0 && millis() - last_press > 100)   
-              {
-                butt_flag = 1;                    
-                flag = !flag;                     
-                last_press = millis();           
-                digitalWrite(relay_pin, flag);    
-              }
-                if (butt == 0 && butt_flag == 1)   
-                {
-                   butt_flag = 0;                    
-                }
-            }
-            
-           //второе реле
-           
-             {
-                butt222 = !digitalRead(button_pin222);  
-                if (butt222 == 1 && butt_flag222 == 0 && millis() - last_press222 > 100)   
-              {
-                butt_flag222 = 1;                    
-                flag222 = !flag222;                     
-                last_press222 = millis();            
-                digitalWrite(relay_pin222, flag222);    
-              }
-                if (butt222 == 0 && butt_flag222 == 1)   
-                {
-                   butt_flag222 = 0;                    
-                }
-               }
-               
-            //третье реле
-            
-              {
-                butt333 = !digitalRead(button_pin333);  
-                if (butt333 == 1 && butt_flag333 == 0 && millis() - last_press333 > 100)   
-              {
-                butt_flag333 = 1;                    
-                flag333 = !flag333;                     
-                last_press333 = millis();            
-                digitalWrite(relay_pin333, flag333);    
-              }
-                if (butt333 == 0 && butt_flag333 == 1)  
-                {
-                   butt_flag333 = 0;                    
-                }
-               }
-               
-            //четвертое реле
-            
-              {
-                butt444 = !digitalRead(button_pin444);  
-                if (butt444 == 1 && butt_flag444 == 0 && millis() - last_press444 > 100)   
-              {
-                butt_flag444 = 1;                    
-                flag444 = !flag444;                     
-                last_press444 = millis();            
-                digitalWrite(relay_pin444, flag444);    
-              }
-                if (butt444 == 0 && butt_flag444 == 1)   
-                {
-                   butt_flag444 = 0;                    
-                }
-               }
-               
-             //пятое реле
-             
-              {
-                butt555 = !digitalRead(Voda_pin);  
-                if (butt555 == 1 && butt_flag555 == 0 && millis() - last_press555 > 100)   
-              {
-                butt_flag555 = 1;                    
-                flag555 = !flag555;                     
-                last_press555 = millis();            
-                digitalWrite(relay_pin555, flag555);    
-              }
-                if (butt555 == 0 && butt_flag555 == 1)   
-                {
-                   butt_flag555 = 0;                    
-                }
-               }
-              {
-          { 
-               float h = dht.readHumidity(); 
-               float t = dht.readTemperature(); 
-               if (isnan(h) || isnan(t)) { 
-          {
-           }
-           
-           //Serial.println ("Ошибка при считывании информации"); 
-           
-           } 
-            else 
-           { 
-            
-           //Serial.print ("Влажность: "); 
-           //Serial.print (h);  
-           //Serial.print (" %\t"); 
-           //Serial.print ("Температура: "); 
-           //Serial.print (t); 
-           //Serial.println (" *C"); 
-           
-           } 
-           if (t > 32) 
-           { 
-           digitalWrite (relay_pin777, HIGH); 
-           } 
-           else //иначе 
-           { 
-           digitalWrite (relay_pin777, LOW); 
-           } 
-           if (t < 22) 
-           { 
-           digitalWrite (relay_pin666, HIGH); 
-           } 
-           else //иначе 
-           { 
-           digitalWrite (relay_pin666, LOW);  
-           }  
-           }
-           }
-           {
-                 sensorValue = analogRead(gaz_pin); 
-                 if (sensorValue >= 500) 
-                 {
-                 tone(bip_pin,350,250);  
-                 }
-                 else 
-                 {
-                 digitalWrite(bip_pin, LOW); 
-                 }
-              //Serial.print("MQ2 value= "); 
-              //Serial.println(sensorValue); 
-           }
-              
-           {
-              if (mySerial.available())
-           {
-              int c = mySerial.read(); 
-           {
-              if (c == '8') 
-           {
-              digitalWrite(relay_pin888,HIGH);
-              Serial.println("реле8 - ON");
-           }
-           }
-           {
-              if (c == 'i')
-           {
-              digitalWrite(relay_pin888,LOW);
-              Serial.println("реле8 - OFF");
-           }
-           {
-              if (c == '1')
-           {
-              digitalWrite(relay_pin,HIGH);
-              Serial.println("реле1 - ON");
-           }
-           }
-           {
-              if (c == 'q')
-           {
-              digitalWrite(relay_pin,LOW);
-              Serial.println("реле1 - OFF");
-           }
-           }
-           {
-              if (c == '2')
-           {
-              digitalWrite(relay_pin222,HIGH);
-              Serial.println("реле2 - ON");
-           }
-           }
-           {
-              if (c == 'w')
-           {
-              digitalWrite(relay_pin222,LOW);
-              Serial.println("реле2 - OFF");
-           }
-           }
-           {
-              if (c == '3')
-           {
-              digitalWrite(relay_pin333,HIGH);
-              Serial.println("реле3 - ON");
-           }
-           }
-           {
-              if (c == 'e')
-           {
-              digitalWrite(relay_pin333,LOW);
-              Serial.println("реле3 - OFF");
-           }
-           {
-              if (c == '4')
-           {
-              digitalWrite(relay_pin444,HIGH);
-              Serial.println("реле4 - ON");
-           }
-           }
-           {
-              if (c == 'r')
-           {
-              digitalWrite(relay_pin444,LOW);
-              Serial.println("реле4 - OFF"); 
-           }
-           }
-           }
-           {
-              if (c == '5') 
-           {
-              digitalWrite(relay_pin555,HIGH);
-              Serial.println("реле5 - ON");
-           }
-           }
-           {
-              if (c == 't')
-           {
-              digitalWrite(relay_pin555,LOW);
-              Serial.println("реле5 - OFF");
-           }
-       }
-       
-         }
-        }
-       }
+      if(c == '$'){                                 //если переменная "с", несущая отправленный нам запрос, содержит символ $ 
+                                                    //(все новые запросы) - "$" подразумевает разделение получаемой информации (символов)
+        newInfo = 1;                                //то пришла новая информация, ставим метку новой информации в 1
       }
+      
+      /************************************************************************************************
+      Примечание:
+      Символ $ используется как обычный символ, который разделяет 1 от 2
+      На практике применяют символ &, который разделяет новые переменные от последующих
+      Это использьуется, например, в GET-запросах, которые выглядят подобным образом:
+      client.print("GET /controlbar/wp-content/data.php?uid=" + ID + "&type=" + type + "&value=" + value);
+      как видите, знак & разделяет значение переменной - ID и переменную type     
+      ***************************************************************************************************/
+      
+                                                     //Проверяем содержание URL - присутствует $1 или $2
+      if(newInfo == 1){                              //если есть новая информация
+          Serial.println(c);
+          if(c == '1'){                              //и "с" содержит 1
+          Serial.println("ON");
+          digitalWrite(2, HIGH);                    //то вкл 1 реле
+          }
+          if(c == '2'){                              //если "с" содержит 2
+          Serial.println("OFF");
+          digitalWrite(2, LOW);                     //выкл 1 реле
+          }    
+
+          
+          if(c == '3'){                              
+          Serial.println("ON");                      //2 реле
+          digitalWrite(3, HIGH);
+           } 
+          if (c == '4'){
+             Serial.println("off");
+            digitalWrite(3, LOW);
+          }
+
+      if(c == '5'){                              
+          Serial.println("ON");
+          digitalWrite(4, HIGH);                    //то вкл 3 реле
+          }
+          if(c == '6'){                              
+          Serial.println("OFF");
+          digitalWrite(4, LOW);                     //выкл 3 реле
+          }  
+
+          
+          if(c == '7'){                              
+          Serial.println("ON");
+          digitalWrite(5, HIGH);                    //вкл 4 реле
+          }
+          if(c == '8'){                            
+          Serial.println("OFF");
+          digitalWrite(5, LOW);                     //выкл 4 реле
+          }  
+
+          if(c == '9'){                              
+          Serial.println("ON");
+          digitalWrite(6, HIGH);                    //то вкл 5 реле
+          }
+          if(c == '10'){                              
+          Serial.println("OFF");
+          digitalWrite(6, LOW);                     //выкл 5 реле
+          }  
+
+          if(c == '11'){                              
+          Serial.println("ON");
+          digitalWrite(7, HIGH);                    //то вкл 6 реле
+          }
+          if(c == '12'){                              
+          Serial.println("OFF");
+          digitalWrite(7, LOW);                     //выкл 6 реле
+          }  
+
+          if(c == '13'){                              
+          Serial.println("ON");
+          digitalWrite(8, HIGH);                    //то вкл 7 реле
+          }
+          if(c == '14'){                              
+          Serial.println("OFF");
+          digitalWrite(8, LOW);                     //выкл 7 реле
+          }  
+
+          if(c == '15'){                              
+          Serial.println("ON");
+          digitalWrite(9, HIGH);                    //то вкл 8 реле
+          }
+          if(c == '16'){                              
+          Serial.println("OFF");
+          digitalWrite(9, LOW);                     //выкл 8 реле
+          }  
+      }
+      if (c == '\n') {                              //если "с" равен символу новой строки
+        currentLineIsBlank = true;                  //то начинаем новую строку
+      } 
+      else if (c != '\r') {                         //иначе, если "с" не равен символу возврата курсора на начало строки
+        currentLineIsBlank = false;                 //то получаем символ на текущей строке
+      }
+    
+      if (c == '\n' && currentLineIsBlank) {        //выводим HTML страницу
+        client.println("HTTP/1.1 200 OK");          //заголовочная информация
+        client.println("Content-Type: text/html");
+        client.println("Connection: close");  
+        client.println("Refresh: 30");              //автоматическое обновление каждые 30 сек
+        client.println();
+        client.println("<!DOCTYPE HTML>");          //HTML тип документа
+        client.println("<html>");                   //открытие тега HTML 
+        client.println("<head>");
+        client.print("<title>My web Server</title>");                  //название страницы
+        client.println("</head>");
+        client.print("<H1>My web Server</H1>");                        //заголовк на странице
+
+          client.print("<p>kitchen</p>");
+          client.print("<a href=\"/$1\"><button>On</button></a>");       //реле 1
+          client.print("<a href=\"/$2\"><button>Off</button></a>");      
+          client.println("<br />");  
+          
+          client.print("<p>Bedroom 1</p>");
+          client.print("<a href=\"/$3\"><button>On</button></a>");       //реле 2
+          client.print("<a href=\"/$4\"><button>Off</button></a>");      
+          client.println("<br />");       
+
+          client.print("<p>Bedroom 2</p>");
+          client.print("<a href=\"/$5\"><button>On</button></a>");       //реле 3
+          client.print("<a href=\"/$6\"><button>Off</button></a>");      
+          client.println("<br />");
+
+          client.print("<p>Hole</p>");
+          client.print("<a href=\"/$7\"><button>On</button></a>");       //реле 4
+          client.print("<a href=\"/$8\"><button>Off</button></a>");      
+          client.println("<br />");
+
+          client.print("<p>Bathroom</p>");
+          client.print("<a href=\"/$9\"><button>On</button></a>");       //реле 5
+          client.print("<a href=\"/$10\"><button>Off</button></a>");      
+          client.println("<br />");
+
+          client.print("<p>Corridor</p>");
+          client.print("<a href=\"/$11\"><button>On</button></a>");       //реле 6
+          client.print("<a href=\"/$12\"><button>Off</button></a>");      
+          client.println("<br />");
+        
+          client.print("<p>Hallway</p>");
+          client.print("<a href=\"/$13\"><button>On</button></a>");       //реле 7
+          client.print("<a href=\"/$14\"><button>Off</button></a>");      
+          client.println("<br />");
+         
+          client.print("<p>Sockets</p>");
+          client.print("<a href=\"/$15\"><button>On</button></a>");       //реле 8
+          client.print("<a href=\"/$16\"><button>Off</button></a>");      
+          client.println("<br />");
+        
+        client.println("</html>");                  //закрываем тег HTML
+        break;                                      //выход
+      }
+    
+    }
+    
+  }
+  delay(1);                                          //время на получение новых данных
+  client.stop();                                     //закрываем соеднение 
+}
+}
